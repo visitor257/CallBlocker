@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.telecom.Call
 import android.telecom.CallScreeningService
+import android.telecom.TelecomManager
 import android.telephony.SubscriptionManager
 import android.telephony.TelephonyManager
 import androidx.core.content.ContextCompat
@@ -21,18 +22,21 @@ class CallBlockerService : CallScreeningService() {
     private val scope = CoroutineScope(Dispatchers.IO)
     private lateinit var repository: CallBlockerRepository
 
-    /** Read each SIM's phone number via TelephonyManager (needs READ_PHONE_STATE) */
-    private val simPhoneNumbers: List<String> by lazy {
+    /** SubscriptionManager-based SIM info (reliable with READ_PHONE_STATE) */
+    private data class SimInfo(val slotIndex: Int, val subId: Int, val carrier: String?, val number: String?)
+    private val activeSims: List<SimInfo> by lazy {
         try {
-            val tm = getSystemService(TelephonyManager::class.java) ?: return@lazy emptyList()
-            val count = tm.activeModemCount.coerceAtMost(4)
-            (0 until count).mapNotNull { slotId ->
+            val subMgr = getSystemService(SubscriptionManager::class.java) ?: return@lazy emptyList()
+            subMgr.activeSubscriptionInfoList?.mapNotNull { info ->
                 try {
-                    val tm2 = tm.createForSubscriptionId(slotId)
-                    val num = tm2.line1Number?.trim()
-                    if (num.isNullOrEmpty()) null else num
+                    SimInfo(
+                        slotIndex = info.simSlotIndex,
+                        subId = info.subscriptionId,
+                        carrier = info.carrierName?.toString(),
+                        number = info.number?.trim()
+                    )
                 } catch (_: Exception) { null }
-            }
+            } ?: emptyList()
         } catch (_: Exception) { emptyList() }
     }
 
@@ -41,64 +45,65 @@ class CallBlockerService : CallScreeningService() {
         repository = (application as CallBlockerApp).repository
         writeDiag("--- Service start ---")
         writeDiag("READ_PHONE_STATE=${hasPermission(Manifest.permission.READ_PHONE_STATE)}")
-        val nums = simPhoneNumbers
-        if (nums.isNotEmpty()) {
-            writeDiag("SIM numbers: ${nums.joinToString(", ")}")
+
+        // Dump all SIM info from SubscriptionManager (now with permission)
+        val sims = activeSims
+        if (sims.isNotEmpty()) {
+            writeDiag("Active SIMs (from SubMgr):")
+            sims.forEach { s ->
+                writeDiag("  slot=${s.slotIndex} subId=${s.subId} carrier=${s.carrier} number=${s.number}")
+            }
+        } else {
+            writeDiag("Active SIMs: none from SubMgr")
         }
+
+        // Try TelecomManager phone accounts
+        try {
+            val tm = getSystemService(TelecomManager::class.java)
+            if (tm != null) {
+                val accounts = tm.callCapablePhoneAccounts
+                if (accounts.isNotEmpty()) {
+                    writeDiag("TelecomManager callCapablePhoneAccounts:")
+                    accounts.forEach { acc ->
+                        val pa = tm.getPhoneAccount(acc)
+                        writeDiag("  cmp=${acc.componentName?.className} id=${acc.id}")
+                    }
+                } else {
+                    writeDiag("TelecomManager accounts: empty")
+                }
+            } else {
+                writeDiag("TelecomManager: null")
+            }
+        } catch (ex: Exception) {
+            writeDiag("TelecomManager error: ${ex.message}")
+        }
+
+        // Try TelephonyManager SIM numbers
+        try {
+            val tm = getSystemService(TelephonyManager::class.java)
+            if (tm != null) {
+                writeDiag("TelephonyManager.phoneCount=${tm.phoneCount}")
+                writeDiag("TelephonyManager.activeModemCount=${tm.activeModemCount}")
+                // simCount not available on minSdk 24
+                for (slotId in 0 until 4) {
+                    try {
+                        val tm2 = tm.createForSubscriptionId(slotId)
+                        writeDiag("  TM(subId=$slotId): line1=${tm2.line1Number} op=${tm2.simOperator}")
+                    } catch (_: Exception) {}
+                }
+            }
+        } catch (ex: Exception) {
+            writeDiag("TelephonyManager error: ${ex.message}")
+        }
+
+        // static default subIds
+        try {
+            writeDiag("Default subIds: data=${SubscriptionManager.getDefaultDataSubscriptionId()} voice=${SubscriptionManager.getDefaultVoiceSubscriptionId()} sms=${SubscriptionManager.getDefaultSmsSubscriptionId()}")
+        } catch (_: Exception) {}
     }
 
     private fun hasPermission(perm: String): Boolean {
         return ContextCompat.checkSelfPermission(this, perm) == PackageManager.PERMISSION_GRANTED
-    }
-
-    private fun getSimSlot(number: String): Int {
-        // Strategy 1: Call.Details extras (failed on this phone)
-
-        // Strategy 2: SubscriptionManager
-        try {
-            val subManager = getSystemService(SubscriptionManager::class.java)
-            val activeList = subManager?.activeSubscriptionInfoList
-            if (!activeList.isNullOrEmpty()) {
-                // Try direct slot queries
-                for (slotId in 0 until activeList.size) {
-                    val info = subManager.getActiveSubscriptionInfoForSimSlotIndex(slotId)
-                    if (info != null) {
-                        writeDiag("Slot detect via SubMgr: slot=$slotId subId=${info.subscriptionId}")
-                    }
-                }
-                if (activeList.size == 1) return activeList[0].simSlotIndex
-                // If we get here with multiple active subs, we still don't know which one
-                // But we can try to find by carrier name or number if available
-                return 0
-            }
-        } catch (_: Exception) {}
-
-        // Strategy 3: Check if READ_PHONE_STATE is available and try TelephonyManager
-        if (hasPermission(Manifest.permission.READ_PHONE_STATE)) {
-            try {
-                val tm = getSystemService(TelephonyManager::class.java)
-                if (tm != null) {
-                    val count = tm.activeModemCount
-                    writeDiag("TelephonyManager.activeModemCount=$count")
-                    for (slotId in 0 until count.coerceAtMost(4)) {
-                        try {
-                            val tm2 = tm.createForSubscriptionId(slotId)
-                            writeDiag("  TM(subId=$slotId): op=${tm2.simOperator} line1=${tm2.line1Number}")
-                        } catch (_: Exception) {}
-                    }
-                }
-            } catch (_: Exception) {}
-        }
-
-        // Strategy 4: try static SubscriptionManager methods
-        try {
-            val defaultData = SubscriptionManager.getDefaultDataSubscriptionId()
-            val defaultVoice = SubscriptionManager.getDefaultVoiceSubscriptionId()
-            val defaultSms = SubscriptionManager.getDefaultSmsSubscriptionId()
-            writeDiag("Default subIds: data=$defaultData voice=$defaultVoice sms=$defaultSms")
-        } catch (_: Exception) {}
-
-        return 0 // fallback
     }
 
     override fun onScreenCall(details: Call.Details) {
@@ -136,8 +141,9 @@ class CallBlockerService : CallScreeningService() {
             writeDiag(sb.toString())
         } catch (_: Exception) {}
 
-        val simSlot = getSimSlot(number)
-        writeDiag("Resolved slot=$simSlot for number=$number")
+        // Always fallback to slot 0 since we can't detect incoming SIM on this phone
+        val simSlot = 0
+        writeDiag("Using slot=$simSlot for number=$number (detection unsupported)")
 
         scope.launch {
             try {
