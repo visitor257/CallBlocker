@@ -3,6 +3,7 @@
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -55,17 +56,11 @@ fun WhitelistScreen(modifier: Modifier = Modifier) {
     var snackbarMessage by remember { mutableStateOf("") }
     val snackbarHostState = remember { SnackbarHostState() }
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        floatingActionButton = {
-            FloatingActionButton(onClick = { showAddDialog = true }, containerColor = Blue700) {
-                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.cd_add), tint = OnPrimary)
-            }
-        }
-    ) { padding ->
+    Box(modifier = modifier.fillMaxSize()) {
         LazyColumn(
-            modifier = modifier.fillMaxSize().padding(padding).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.fillMaxSize().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(bottom = 80.dp)
         ) {
             item {
                 SimSelector(sims = sims, selectedSim = selectedSim, onSelect = { selectedSim = it })
@@ -120,7 +115,7 @@ fun WhitelistScreen(modifier: Modifier = Modifier) {
                                     style = MaterialTheme.typography.labelSmall, color = if (entry.source == "CONTACT") Blue500 else Gray400
                                 )
                             }
-                                                        IconButton(onClick = { showMoveToBlacklistConfirm = entry }) {
+                            IconButton(onClick = { showMoveToBlacklistConfirm = entry }) {
                                 Icon(Icons.Default.Block, contentDescription = stringResource(R.string.cd_move_blacklist), tint = Orange500)
                             }
                             IconButton(onClick = { showDeleteConfirm = entry }) {
@@ -130,6 +125,21 @@ fun WhitelistScreen(modifier: Modifier = Modifier) {
                     }
                 }
             }
+        }
+
+        // Snackbar host
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 64.dp)
+        )
+
+        // Floating action button
+        FloatingActionButton(
+            onClick = { showAddDialog = true },
+            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+            containerColor = Blue700
+        ) {
+            Icon(Icons.Default.Add, contentDescription = stringResource(R.string.cd_add), tint = OnPrimary)
         }
     }
 
