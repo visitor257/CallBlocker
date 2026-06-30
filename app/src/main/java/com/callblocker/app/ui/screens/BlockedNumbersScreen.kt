@@ -52,17 +52,11 @@ fun BlockedNumbersScreen(modifier: Modifier = Modifier) {
     var snackbarMessage by remember { mutableStateOf("") }
     val snackbarHostState = remember { SnackbarHostState() }
 
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        floatingActionButton = {
-            FloatingActionButton(onClick = { showAddDialog = true }, containerColor = Red500) {
-                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.cd_add), tint = OnPrimary)
-            }
-        }
-    ) { padding ->
+    Box(modifier = modifier.fillMaxSize()) {
         LazyColumn(
-            modifier = modifier.fillMaxSize().padding(padding).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.fillMaxSize().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(bottom = 80.dp)
         ) {
             item {
                 SimSelector(sims = sims, selectedSim = selectedSim, onSelect = { selectedSim = it })
@@ -120,6 +114,21 @@ fun BlockedNumbersScreen(modifier: Modifier = Modifier) {
                     }
                 }
             }
+        }
+
+        // Snackbar host
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 64.dp)
+        )
+
+        // Floating action button
+        FloatingActionButton(
+            onClick = { showAddDialog = true },
+            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+            containerColor = Red500
+        ) {
+            Icon(Icons.Default.Add, contentDescription = stringResource(R.string.cd_add), tint = OnPrimary)
         }
     }
 
