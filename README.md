@@ -33,41 +33,6 @@
 | 最低版本 | Android 7.0（API 24） |
 | 目标版本 | Android 14（API 34） |
 
-## 项目结构
-
-```
-app/src/main/java/com/callblocker/app/
-├── CallBlockerApp.kt          # Application 入口
-├── data/
-│   ├── dao/                   # Room DAO
-│   │   ├── WhitelistDao.kt
-│   │   ├── BlacklistDao.kt
-│   │   ├── SimConfigDao.kt
-│   │   └── CallRecordDao.kt
-│   ├── db/
-│   │   └── AppDatabase.kt     # 数据库定义 + Migration
-│   ├── entity/                # 数据实体
-│   │   ├── WhitelistEntry.kt
-│   │   ├── BlockedNumber.kt
-│   │   ├── SimConfig.kt
-│   │   └── BlockedCallRecord.kt
-│   └── repository/
-│       └── CallBlockerRepository.kt
-├── service/
-│   └── CallBlockerService.kt  # 核心拦截服务
-├── ui/
-│   ├── screens/
-│   │   ├── HomeScreen.kt      # 首页（SIM 选择 + 拦截状态 + 记录抽屉）
-│   │   ├── WhitelistScreen.kt # 白名单管理
-│   │   ├── BlockedNumbersScreen.kt  # 黑名单管理
-│   │   ├── SettingsScreen.kt  # 设置页面
-│   │   └── MainScreen.kt      # 底部导航
-│   └── theme/
-│       └── Theme.kt           # 主题 + 颜色
-└── util/
-    └── SimUtils.kt            # SIM 卡工具
-```
-
 ## 本地开发
 
 ### 环境要求
