@@ -13,6 +13,66 @@ class CallBlockerService : CallScreeningService() {
     private val scope = CoroutineScope(Dispatchers.IO)
     private lateinit var repository: CallBlockerRepository
 
+    /**
+     * Accurately determine which SIM slot received this call.
+     * Uses multiple strategies to handle different phone vendors.
+     */
+    private fun resolveSimSlot(details: Call.Details): Int {
+        try {
+            val subManager = getSystemService(SubscriptionManager::class.java) ?: return 0
+            val activeInfos = subManager.activeSubscriptionInfoList
+            if (activeInfos.isNullOrEmpty()) return 0
+            if (activeInfos.size == 1) return activeInfos[0].simSlotIndex
+
+            val accountHandle = details.accountHandle
+            if (accountHandle != null) {
+                val accountId = accountHandle.id
+
+                // Strategy 1: Direct integer parse (works on Google Pixel, stock Android)
+                try {
+                    val subId = accountId.toInt()
+                    activeInfos.find { it.subscriptionId == subId }?.let { return it.simSlotIndex }
+                } catch (_: NumberFormatException) { }
+
+                // Strategy 2: Parse suffix after last "-" (common on Samsung/小米)
+                // e.g. "com.android.phone/.TelephonyConnectionService-1"
+                try {
+                    val parts = accountId.split("-")
+                    val subId = parts.last().toInt()
+                    activeInfos.find { it.subscriptionId == subId }?.let { return it.simSlotIndex }
+                } catch (_: Exception) { }
+
+                // Strategy 3: ICCID substring match (Samsung alternative)
+                for (info in activeInfos) {
+                    try {
+                        val iccid = info.iccId ?: continue
+                        if (accountId.contains(iccid)) return info.simSlotIndex
+                    } catch (_: Exception) { }
+                }
+
+                // Strategy 4: Original approach — direct string compare
+                val matched = activeInfos.find { info ->
+                    try { info.subscriptionId.toString() == accountId } catch (_: Exception) { false }
+                }
+                if (matched != null) return matched.simSlotIndex
+            }
+
+            // Strategy 5: Use default voice subscription as hint
+            try {
+                val voiceSubId = SubscriptionManager.getDefaultVoiceSubscriptionId()
+                if (voiceSubId >= 0) {
+                    activeInfos.find { it.subscriptionId == voiceSubId }?.let { return it.simSlotIndex }
+                }
+            } catch (_: Exception) { }
+
+            // Strategy 6: Pick first non-zero slot (often the incoming call slot)
+            // Try to find a slot different from 0 as a guess for the second SIM
+            activeInfos.find { it.simSlotIndex != 0 }?.let { return it.simSlotIndex }
+
+        } catch (_: Exception) { }
+        return 0
+    }
+
     override fun onCreate() {
         super.onCreate()
         repository = (application as CallBlockerApp).repository
@@ -24,31 +84,8 @@ class CallBlockerService : CallScreeningService() {
             return
         }
 
-        // Determine SIM slot from subscription info
-        var simSlot = 0
-        try {
-            val subManager = getSystemService(SubscriptionManager::class.java)
-            if (subManager != null) {
-                val activeInfos = subManager.activeSubscriptionInfoList
-                if (!activeInfos.isNullOrEmpty()) {
-                    if (activeInfos.size == 1) {
-                        // Only one SIM active — use its slot directly
-                        simSlot = activeInfos[0].simSlotIndex
-                    } else {
-                        // Multiple SIMs — try to match by account handle
-                        val phoneAccountHandle = details.accountHandle
-                        if (phoneAccountHandle != null) {
-                            val matched = activeInfos.find { info ->
-                                try {
-                                    info.subscriptionId.toString() == phoneAccountHandle.id
-                                } catch (_: Exception) { false }
-                            }
-                            if (matched != null) simSlot = matched.simSlotIndex
-                        }
-                    }
-                }
-            }
-        } catch (_: Exception) { }
+        // Determine SIM slot with multi-strategy fallback
+        val simSlot = resolveSimSlot(details)
 
         scope.launch {
             try {

@@ -31,10 +31,12 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
     val sims = remember(simConfigs) {
         val detected = SimUtils.getActiveSims(context)
         val configMap = simConfigs.associateBy { it.simSlot }
+        val defaultLabel = { slot: Int -> context.getString(com.callblocker.app.R.string.sim_card_format, slot + 1) }
         detected.map { info ->
-            configMap[info.simSlot]?.let { cfg ->
+            val cfg = configMap[info.simSlot]
+            if (cfg != null && cfg.displayName != defaultLabel(info.simSlot)) {
                 info.copy(displayName = cfg.displayName)
-            } ?: info
+            } else info
         }.ifEmpty { SimUtils.getDefaultSims(context) }
     }
     var selectedSim by remember { mutableIntStateOf(0) }
