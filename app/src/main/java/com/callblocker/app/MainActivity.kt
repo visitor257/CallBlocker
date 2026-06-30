@@ -39,7 +39,8 @@ class MainActivity : ComponentActivity() {
     private fun requestRequiredPermissions() {
         val needed = mutableListOf(
             Manifest.permission.READ_CONTACTS,
-            Manifest.permission.READ_CALL_LOG
+            Manifest.permission.READ_CALL_LOG,
+            Manifest.permission.READ_PHONE_STATE
         ).filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
