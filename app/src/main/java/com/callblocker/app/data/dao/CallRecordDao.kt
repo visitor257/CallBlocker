@@ -20,6 +20,9 @@ interface CallRecordDao {
     @Query("SELECT COUNT(*) FROM blocked_calls WHERE phoneNumber = :number AND simSlot = :simSlot AND timestamp > :since")
     suspend fun countByNumberSince(number: String, simSlot: Int, since: Long): Int
 
+    @Query("SELECT COUNT(*) FROM blocked_calls WHERE phoneNumber = :number AND timestamp > :since")
+    suspend fun countByNumberSinceAnySlot(number: String, since: Long): Int
+
     @Insert
     suspend fun insert(record: BlockedCallRecord)
 

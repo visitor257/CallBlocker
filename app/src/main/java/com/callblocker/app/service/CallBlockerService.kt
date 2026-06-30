@@ -115,7 +115,7 @@ class CallBlockerService : CallScreeningService() {
                     return@launch
                 }
 
-                if (repository.hasBeenCalledRecently(normalized, config.intervalMinutes.toLong(), simSlot)) {
+                if (repository.hasBeenCalledRecently(normalized, config.intervalMinutes.toLong())) {
                     respondToCall(details, CallResponse.Builder().build())
                     return@launch
                 }

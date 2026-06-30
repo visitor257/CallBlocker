@@ -120,9 +120,10 @@ class CallBlockerRepository(
     // --- Per-SIM blocked calls ---
     fun getBlockedCallsBySim(simSlot: Int): Flow<List<BlockedCallRecord>> = callRecordDao.getBySim(simSlot)
 
-    suspend fun hasBeenCalledRecently(number: String, intervalMinutes: Long, simSlot: Int = 0): Boolean {
+    suspend fun hasBeenCalledRecently(number: String, intervalMinutes: Long): Boolean {
         val since = System.currentTimeMillis() - (intervalMinutes * 60 * 1000)
-        return callRecordDao.countByNumberSince(normalizeNumber(number), simSlot, since) > 0
+        // Check across all SIM slots — resolveSimSlot is heuristic, may vary between calls
+        return callRecordDao.countByNumberSinceAnySlot(normalizeNumber(number), since) > 0
     }
 
     suspend fun recordBlockedCall(number: String, name: String? = null, simSlot: Int = 0) {
