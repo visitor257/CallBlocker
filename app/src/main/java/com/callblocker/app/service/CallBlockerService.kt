@@ -8,13 +8,16 @@ import com.callblocker.app.data.repository.CallBlockerRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class CallBlockerService : CallScreeningService() {
     private val scope = CoroutineScope(Dispatchers.IO)
     private lateinit var repository: CallBlockerRepository
 
     companion object {
-        // Diagnostic values — populated by resolveSimSlot, used for debugging
         var lastAccountId: String = ""
         var lastSimCount: Int = 0
         var lastActiveSlots: String = ""
@@ -24,7 +27,7 @@ class CallBlockerService : CallScreeningService() {
      * Determine which SIM slot received this call.
      * Uses multiple strategies to handle different phone vendors.
      */
-    private fun resolveSimSlot(details: Call.Details): Int {
+    private fun resolveSimSlot(details: Call.Details, number: String): Int {
         try {
             val subManager = getSystemService(SubscriptionManager::class.java)
             val activeInfos = subManager?.activeSubscriptionInfoList
@@ -33,36 +36,33 @@ class CallBlockerService : CallScreeningService() {
             val accountHandle = details.accountHandle
             val accountId = accountHandle?.id ?: "null"
 
-            // --- Diagnostic: store raw values in a static field for the service to use ---
             lastAccountId = accountId
             lastSimCount = simCount
             lastActiveSlots = activeInfos?.joinToString(",") { "${it.simSlotIndex}(subId=${it.subscriptionId})" } ?: "null"
+
+            writeDiag("SlotDetect|number=$number|accountId=$accountId|activeSims=$simCount|slots=$lastActiveSlots")
 
             if (activeInfos.isNullOrEmpty()) return 0
             if (activeInfos.size == 1) return activeInfos[0].simSlotIndex
 
             if (accountHandle != null) {
-                // Strategy 1: Parse as int, try matching against simSlotIndex first
                 try {
                     val numericId = accountId.toInt()
                     val directMatch = activeInfos.find { it.simSlotIndex == numericId }
                     if (directMatch != null) return directMatch.simSlotIndex
                 } catch (_: NumberFormatException) { }
 
-                // Strategy 2: Direct integer parse matching subscriptionId
                 try {
                     val subId = accountId.toInt()
                     activeInfos.find { it.subscriptionId == subId }?.let { return it.simSlotIndex }
                 } catch (_: NumberFormatException) { }
 
-                // Strategy 3: Parse suffix after last "-"
                 try {
                     val parts = accountId.split("-")
                     val subId = parts.last().toInt()
                     activeInfos.find { it.subscriptionId == subId }?.let { return it.simSlotIndex }
                 } catch (_: Exception) { }
 
-                // Strategy 4: ICCID substring match
                 for (info in activeInfos) {
                     try {
                         val iccid = info.iccId ?: continue
@@ -70,13 +70,11 @@ class CallBlockerService : CallScreeningService() {
                     } catch (_: Exception) { }
                 }
 
-                // Strategy 5: Direct string compare
                 val matched = activeInfos.find { info ->
                     try { info.subscriptionId.toString() == accountId } catch (_: Exception) { false }
                 }
                 if (matched != null) return matched.simSlotIndex
 
-                // Strategy 6: Partial string match
                 for (info in activeInfos) {
                     try {
                         val slotStr = info.simSlotIndex.toString()
@@ -88,7 +86,6 @@ class CallBlockerService : CallScreeningService() {
                 }
             }
 
-            // Strategy 7: Default voice subscription
             try {
                 val voiceSubId = SubscriptionManager.getDefaultVoiceSubscriptionId()
                 if (voiceSubId >= 0) {
@@ -96,7 +93,6 @@ class CallBlockerService : CallScreeningService() {
                 }
             } catch (_: Exception) { }
 
-            // Strategy 8: Pick first non-zero slot
             activeInfos.find { it.simSlotIndex != 0 }?.let { return it.simSlotIndex }
 
         } catch (_: Exception) { }
@@ -106,6 +102,7 @@ class CallBlockerService : CallScreeningService() {
     override fun onCreate() {
         super.onCreate()
         repository = (application as CallBlockerApp).repository
+        writeDiag("--- Service start ---")
     }
 
     override fun onScreenCall(details: Call.Details) {
@@ -114,8 +111,8 @@ class CallBlockerService : CallScreeningService() {
             return
         }
 
-        val simSlot = resolveSimSlot(details)
-        val diagLabel = "acc=$lastAccountId|sims=$lastSimCount|slots=$lastActiveSlots"
+        val simSlot = resolveSimSlot(details, number)
+        writeDiag("Resolved|number=$number|slot=$simSlot")
 
         scope.launch {
             try {
@@ -127,7 +124,6 @@ class CallBlockerService : CallScreeningService() {
 
                 val normalized = CallBlockerRepository.normalizeNumber(number)
 
-                // 1. Blacklist check (per-SIM) → block + record
                 if (repository.isBlacklisted(normalized, simSlot)) {
                     val blockResponse = CallResponse.Builder()
                         .setDisallowCall(true)
@@ -136,25 +132,25 @@ class CallBlockerService : CallScreeningService() {
                         .setSkipCallLog(false)
                         .build()
                     respondToCall(details, blockResponse)
-                    repository.recordCall(normalized, name = diagLabel, simSlot = simSlot)
+                    repository.recordCall(normalized, simSlot = simSlot)
+                    writeDiag("Action|number=$normalized|slot=$simSlot|action=BLOCK_LIST")
                     return@launch
                 }
 
-                // 2. Whitelist check (per-SIM) → allow + record (for interval tracking later)
                 if (repository.isWhitelisted(normalized, simSlot)) {
                     respondToCall(details, CallResponse.Builder().build())
-                    repository.recordCall(normalized, name = diagLabel, simSlot = simSlot)
+                    repository.recordCall(normalized, simSlot = simSlot)
+                    writeDiag("Action|number=$normalized|slot=$simSlot|action=ALLOW_LIST")
                     return@launch
                 }
 
-                // 3. Interval check (per-SIM) → record + allow
                 if (repository.hasBeenCalledRecently(normalized, simSlot, config.intervalMinutes.toLong())) {
                     respondToCall(details, CallResponse.Builder().build())
-                    repository.recordCall(normalized, name = diagLabel, simSlot = simSlot)
+                    repository.recordCall(normalized, simSlot = simSlot)
+                    writeDiag("Action|number=$normalized|slot=$simSlot|action=INTERVAL_OK(${config.intervalMinutes}m)")
                     return@launch
                 }
 
-                // 4. Default: block + record
                 val response = CallResponse.Builder()
                     .setDisallowCall(true)
                     .setRejectCall(true)
@@ -162,10 +158,23 @@ class CallBlockerService : CallScreeningService() {
                     .setSkipCallLog(false)
                     .build()
                 respondToCall(details, response)
-                repository.recordCall(normalized, name = diagLabel, simSlot = simSlot)
+                repository.recordCall(normalized, simSlot = simSlot)
+                writeDiag("Action|number=$normalized|slot=$simSlot|action=BLOCK_DEFAULT")
             } catch (_: Exception) {
                 respondToCall(details, CallResponse.Builder().build())
             }
+        }
+    }
+
+    private fun writeDiag(msg: String) {
+        try {
+            val dir = File("/sdcard/0/")
+            if (!dir.exists()) dir.mkdirs()
+            val logFile = File(dir, "callblocker_diag.txt")
+            val ts = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()).format(Date())
+            logFile.appendText("[$ts] $msg\n")
+        } catch (_: Exception) {
+            // silently ignore write failures
         }
     }
 }
