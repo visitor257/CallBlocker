@@ -168,11 +168,13 @@ class CallBlockerService : CallScreeningService() {
 
     private fun writeDiag(msg: String) {
         try {
-            val dir = File("/sdcard/0/")
-            if (!dir.exists()) dir.mkdirs()
-            val logFile = File(dir, "callblocker_diag.txt")
-            val ts = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()).format(Date())
-            logFile.appendText("[$ts] $msg\n")
+            val dir = getExternalFilesDir(null)
+            if (dir != null) {
+                if (!dir.exists()) dir.mkdirs()
+                val logFile = File(dir, "callblocker_diag.txt")
+                val ts = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()).format(Date())
+                logFile.appendText("[$ts] $msg\n")
+            }
         } catch (_: Exception) {
             // silently ignore write failures
         }
