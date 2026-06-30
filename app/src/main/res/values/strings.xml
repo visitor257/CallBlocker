@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">电话拦截器</string>
+
+    <string name="tab_home">首页</string>
+    <string name="tab_whitelist">白名单</string>
+    <string name="tab_blacklist">黑名单</string>
+    <string name="tab_settings">设置</string>
+
+    <string name="sim_selector_title">选择 SIM 卡</string>
+    <string name="sim_selector_label">当前 SIM 卡</string>
+    <string name="sim_selector_switch">切换</string>
+    <string name="sim_selector_selected">当前</string>
+    <string name="sim_card_format">卡%d</string>
+    <string name="sim_card_default_1">SIM 1</string>
+    <string name="sim_card_default_2">SIM 2</string>
+
+    <string name="home_service_running">%1$s 拦截服务运行中</string>
+    <string name="home_service_paused">%1$s 拦截服务已暂停</string>
+    <string name="home_blocked_summary">已拦截 %1$d 个来电 · 白名单 %2$d 人</string>
+    <string name="home_tap_pause">点击暂停</string>
+    <string name="home_tap_enable">点击启用</string>
+    <string name="home_guide_title">使用引导</string>
+    <string name="home_guide_text">1. 在白名单中添加联系人号码\n2. 进入系统设置 → 应用 → 默认应用 → 来电筛选\n3. 将「电话拦截器」设为默认来电筛选应用\n4. 陌生号码首次来电将被自动拦截</string>
+    <string name="home_blocked_records">%1$s 拦截记录</string>
+    <string name="home_view_records">查看拦截记录（%d）</string>
+    <string name="home_no_records">暂无拦截记录</string>
+
+    <string name="whitelist_title">%1$s 白名单（%2$d）</string>
+    <string name="whitelist_empty">%1$s 白名单为空\n点击右下角 + 添加号码</string>
+    <string name="whitelist_import_contacts">导入通讯录</string>
+    <string name="whitelist_import_success">成功导入 %1$d 个联系人到 %2$s</string>
+    <string name="whitelist_import_none">没有新联系人需要导入</string>
+    <string name="whitelist_source_contact">来自通讯录</string>
+    <string name="whitelist_source_manual">手动添加</string>
+
+    <string name="blacklist_title">%1$s 黑名单（%2$d）</string>
+    <string name="blacklist_empty">%1$s 黑名单为空\n被列入黑名单的号码将始终被拦截\n点击右下角 + 添加号码</string>
+    <string name="blacklist_source_contact">来自通讯录</string>
+    <string name="blacklist_source_manual">手动添加</string>
+    <string name="blacklist_also_in_whitelist">⚠ 此号码同时在白名单中</string>
+
+    <string name="settings_title">%1$s 设置</string>
+    <string name="settings_copy_title">复制配置</string>
+    <string name="settings_copy_desc">从其他 SIM 卡复制间隔和白名单到 %1$s</string>
+    <string name="settings_copy_placeholder">请选择来源</string>
+    <string name="settings_copy_source_label">选择来源 SIM 卡</string>
+    <string name="settings_copy_button">从 %1$s 复制</string>
+    <string name="settings_interval_title">拦截间隔</string>
+    <string name="settings_interval_desc">同一陌生号码在 %1$d 分钟内仅拦截首次来电，对方如回拨则放行</string>
+    <string name="settings_interval_min">1 分钟</string>
+    <string name="settings_interval_value">%1$d 分钟</string>
+    <string name="settings_interval_max">120 分钟</string>
+    <string name="settings_system_title">系统设置</string>
+    <string name="settings_set_default">设为默认来电筛选应用</string>
+    <string name="settings_set_default_desc">需要将本应用设为默认的来电筛选程序才能正常拦截陌生来电</string>
+    <string name="settings_permissions_title">权限管理</string>
+    <string name="settings_open_permissions">打开应用权限设置</string>
+    <string name="settings_data_title">数据管理</string>
+    <string name="settings_clear_records">清空 %1$s 拦截记录</string>
+    <string name="settings_app_version">电话拦截器 %1$s</string>
+    <string name="settings_app_subtitle">基于 Android CallScreeningService | 黑/白名单 | 多 SIM 卡支持</string>
+
+    <string name="dialog_add_whitelist">添加白名单</string>
+    <string name="dialog_add_blacklist">添加黑名单</string>
+    <string name="dialog_remove_whitelist">移出白名单</string>
+    <string name="dialog_move_blacklist">移入黑名单</string>
+    <string name="dialog_remove_blacklist">移出黑名单</string>
+    <string name="dialog_move_whitelist_from_blacklist">移入白名单</string>
+    <string name="dialog_copy_config">复制配置</string>
+    <string name="dialog_clear_records">清空记录</string>
+
+    <string name="confirm_remove_whitelist">确定将 %1$s 从白名单中移除？\n该号码将恢复正常的拦截规则。</string>
+    <string name="confirm_move_to_blacklist">确定将 %1$s 从白名单移至黑名单？\n该号码将始终被拦截，不受间隔规则限制。</string>
+    <string name="confirm_remove_blacklist">确定将 %1$s 从黑名单中移除？</string>
+    <string name="confirm_move_to_whitelist">确定将 %1$s 从黑名单移至白名单？\n该号码将不再被拦截。</string>
+    <string name="confirm_clear_records">确定要清空 %1$s 的所有拦截记录吗？此操作不可撤销。</string>
+    <string name="confirm_copy_config_text">将从 %1$s 复制以下内容到 %2$s：\n\n• 拦截间隔时间\n• 白名单号码\n• 黑名单号码\n\n%2$s 已有配置将被覆盖，确定继续？</string>
+    <string name="confirm_copy_success">已复制间隔设置、%1$d 个白名单和 %2$d 个黑名单号码</string>
+
+    <string name="label_phone_number">电话号码</string>
+    <string name="label_nickname_optional">备注名称（可选）</string>
+
+    <string name="action_add">添加</string>
+    <string name="action_cancel">取消</string>
+    <string name="action_remove">移除</string>
+    <string name="action_clear">清空</string>
+    <string name="action_move_blacklist">移入黑名单</string>
+    <string name="action_move_whitelist_from_blacklist">移入白名单</string>
+    <string name="action_confirm_copy">确定复制</string>
+
+    <string name="cd_add">添加</string>
+    <string name="cd_delete">删除</string>
+    <string name="cd_expand">展开</string>
+    <string name="cd_selected">当前</string>
+    <string name="cd_in_whitelist">已在白名单</string>
+    <string name="cd_add_blacklist">加入黑名单</string>
+    <string name="cd_add_whitelist">加入白名单</string>
+    <string name="cd_in_blacklist">已在黑名单</string>
+    <string name="cd_move_blacklist">移入黑名单</string>
+    <string name="cd_move_whitelist">移入白名单</string>
+    <string name="cd_remove_blacklist">移出黑名单</string>
+</resources>
