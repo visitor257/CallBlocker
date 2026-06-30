@@ -13,44 +13,56 @@ class CallBlockerService : CallScreeningService() {
     private val scope = CoroutineScope(Dispatchers.IO)
     private lateinit var repository: CallBlockerRepository
 
+    companion object {
+        // Diagnostic values — populated by resolveSimSlot, used for debugging
+        var lastAccountId: String = ""
+        var lastSimCount: Int = 0
+        var lastActiveSlots: String = ""
+    }
+
     /**
      * Determine which SIM slot received this call.
      * Uses multiple strategies to handle different phone vendors.
      */
     private fun resolveSimSlot(details: Call.Details): Int {
         try {
-            val subManager = getSystemService(SubscriptionManager::class.java) ?: return 0
-            val activeInfos = subManager.activeSubscriptionInfoList
+            val subManager = getSystemService(SubscriptionManager::class.java)
+            val activeInfos = subManager?.activeSubscriptionInfoList
+            val simCount = activeInfos?.size ?: 0
+
+            val accountHandle = details.accountHandle
+            val accountId = accountHandle?.id ?: "null"
+
+            // --- Diagnostic: store raw values in a static field for the service to use ---
+            lastAccountId = accountId
+            lastSimCount = simCount
+            lastActiveSlots = activeInfos?.joinToString(",") { "${it.simSlotIndex}(subId=${it.subscriptionId})" } ?: "null"
+
             if (activeInfos.isNullOrEmpty()) return 0
             if (activeInfos.size == 1) return activeInfos[0].simSlotIndex
 
-            val accountHandle = details.accountHandle
             if (accountHandle != null) {
-                val accountId = accountHandle.id
-
                 // Strategy 1: Parse as int, try matching against simSlotIndex first
                 try {
                     val numericId = accountId.toInt()
-                    // If it's a small number (0 or 1), treat as simSlotIndex directly
                     val directMatch = activeInfos.find { it.simSlotIndex == numericId }
                     if (directMatch != null) return directMatch.simSlotIndex
                 } catch (_: NumberFormatException) { }
 
                 // Strategy 2: Direct integer parse matching subscriptionId
-                // (after simSlotIndex check, in case subscriptionId also happens to match)
                 try {
                     val subId = accountId.toInt()
                     activeInfos.find { it.subscriptionId == subId }?.let { return it.simSlotIndex }
                 } catch (_: NumberFormatException) { }
 
-                // Strategy 3: Parse suffix after last "-" (common on Samsung/小米)
+                // Strategy 3: Parse suffix after last "-"
                 try {
                     val parts = accountId.split("-")
                     val subId = parts.last().toInt()
                     activeInfos.find { it.subscriptionId == subId }?.let { return it.simSlotIndex }
                 } catch (_: Exception) { }
 
-                // Strategy 4: ICCID substring match (Samsung alternative)
+                // Strategy 4: ICCID substring match
                 for (info in activeInfos) {
                     try {
                         val iccid = info.iccId ?: continue
@@ -64,8 +76,7 @@ class CallBlockerService : CallScreeningService() {
                 }
                 if (matched != null) return matched.simSlotIndex
 
-                // Strategy 6: Try matching by concatenated account ID patterns
-                // Some phones format as "P0S1", "S1D1", "sub0", "SIM_1" etc.
+                // Strategy 6: Partial string match
                 for (info in activeInfos) {
                     try {
                         val slotStr = info.simSlotIndex.toString()
@@ -77,7 +88,7 @@ class CallBlockerService : CallScreeningService() {
                 }
             }
 
-            // Strategy 7: Use default voice subscription as hint
+            // Strategy 7: Default voice subscription
             try {
                 val voiceSubId = SubscriptionManager.getDefaultVoiceSubscriptionId()
                 if (voiceSubId >= 0) {
@@ -85,7 +96,7 @@ class CallBlockerService : CallScreeningService() {
                 }
             } catch (_: Exception) { }
 
-            // Strategy 8: Pick first non-zero slot as fallback for dual-SIM
+            // Strategy 8: Pick first non-zero slot
             activeInfos.find { it.simSlotIndex != 0 }?.let { return it.simSlotIndex }
 
         } catch (_: Exception) { }
@@ -104,6 +115,7 @@ class CallBlockerService : CallScreeningService() {
         }
 
         val simSlot = resolveSimSlot(details)
+        val diagLabel = "acc=$lastAccountId|sims=$lastSimCount|slots=$lastActiveSlots"
 
         scope.launch {
             try {
@@ -124,22 +136,21 @@ class CallBlockerService : CallScreeningService() {
                         .setSkipCallLog(false)
                         .build()
                     respondToCall(details, blockResponse)
-                    repository.recordCall(normalized, simSlot = simSlot)
+                    repository.recordCall(normalized, name = diagLabel, simSlot = simSlot)
                     return@launch
                 }
 
                 // 2. Whitelist check (per-SIM) → allow + record (for interval tracking later)
                 if (repository.isWhitelisted(normalized, simSlot)) {
                     respondToCall(details, CallResponse.Builder().build())
-                    repository.recordCall(normalized, simSlot = simSlot)
+                    repository.recordCall(normalized, name = diagLabel, simSlot = simSlot)
                     return@launch
                 }
 
                 // 3. Interval check (per-SIM) → record + allow
-                // "距离上次来电时间" — every call resets the timer
                 if (repository.hasBeenCalledRecently(normalized, simSlot, config.intervalMinutes.toLong())) {
                     respondToCall(details, CallResponse.Builder().build())
-                    repository.recordCall(normalized, simSlot = simSlot)
+                    repository.recordCall(normalized, name = diagLabel, simSlot = simSlot)
                     return@launch
                 }
 
@@ -151,7 +162,7 @@ class CallBlockerService : CallScreeningService() {
                     .setSkipCallLog(false)
                     .build()
                 respondToCall(details, response)
-                repository.recordCall(normalized, simSlot = simSlot)
+                repository.recordCall(normalized, name = diagLabel, simSlot = simSlot)
             } catch (_: Exception) {
                 respondToCall(details, CallResponse.Builder().build())
             }
