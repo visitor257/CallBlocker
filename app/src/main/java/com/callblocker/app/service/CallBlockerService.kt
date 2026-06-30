@@ -3,6 +3,7 @@ package com.callblocker.app.service
 import android.telecom.Call
 import android.telecom.CallScreeningService
 import android.telephony.SubscriptionManager
+import android.telephony.TelephonyManager
 import com.callblocker.app.CallBlockerApp
 import com.callblocker.app.data.repository.CallBlockerRepository
 import kotlinx.coroutines.CoroutineScope
@@ -17,88 +18,6 @@ class CallBlockerService : CallScreeningService() {
     private val scope = CoroutineScope(Dispatchers.IO)
     private lateinit var repository: CallBlockerRepository
 
-    companion object {
-        var lastAccountId: String = ""
-        var lastSimCount: Int = 0
-        var lastActiveSlots: String = ""
-    }
-
-    /**
-     * Determine which SIM slot received this call.
-     * Uses multiple strategies to handle different phone vendors.
-     */
-    private fun resolveSimSlot(details: Call.Details, number: String): Int {
-        try {
-            val subManager = getSystemService(SubscriptionManager::class.java)
-            val activeInfos = subManager?.activeSubscriptionInfoList
-            val simCount = activeInfos?.size ?: 0
-
-            val accountHandle = details.accountHandle
-            val accountId = accountHandle?.id ?: "null"
-
-            lastAccountId = accountId
-            lastSimCount = simCount
-            lastActiveSlots = activeInfos?.joinToString(",") { "${it.simSlotIndex}(subId=${it.subscriptionId})" } ?: "null"
-
-            writeDiag("SlotDetect|number=$number|accountId=$accountId|activeSims=$simCount|slots=$lastActiveSlots")
-
-            if (activeInfos.isNullOrEmpty()) return 0
-            if (activeInfos.size == 1) return activeInfos[0].simSlotIndex
-
-            if (accountHandle != null) {
-                try {
-                    val numericId = accountId.toInt()
-                    val directMatch = activeInfos.find { it.simSlotIndex == numericId }
-                    if (directMatch != null) return directMatch.simSlotIndex
-                } catch (_: NumberFormatException) { }
-
-                try {
-                    val subId = accountId.toInt()
-                    activeInfos.find { it.subscriptionId == subId }?.let { return it.simSlotIndex }
-                } catch (_: NumberFormatException) { }
-
-                try {
-                    val parts = accountId.split("-")
-                    val subId = parts.last().toInt()
-                    activeInfos.find { it.subscriptionId == subId }?.let { return it.simSlotIndex }
-                } catch (_: Exception) { }
-
-                for (info in activeInfos) {
-                    try {
-                        val iccid = info.iccId ?: continue
-                        if (accountId.contains(iccid)) return info.simSlotIndex
-                    } catch (_: Exception) { }
-                }
-
-                val matched = activeInfos.find { info ->
-                    try { info.subscriptionId.toString() == accountId } catch (_: Exception) { false }
-                }
-                if (matched != null) return matched.simSlotIndex
-
-                for (info in activeInfos) {
-                    try {
-                        val slotStr = info.simSlotIndex.toString()
-                        val subStr = info.subscriptionId.toString()
-                        if (accountId.contains(slotStr) || accountId.contains(subStr)) {
-                            return info.simSlotIndex
-                        }
-                    } catch (_: Exception) { }
-                }
-            }
-
-            try {
-                val voiceSubId = SubscriptionManager.getDefaultVoiceSubscriptionId()
-                if (voiceSubId >= 0) {
-                    activeInfos.find { it.subscriptionId == voiceSubId }?.let { return it.simSlotIndex }
-                }
-            } catch (_: Exception) { }
-
-            activeInfos.find { it.simSlotIndex != 0 }?.let { return it.simSlotIndex }
-
-        } catch (_: Exception) { }
-        return 0
-    }
-
     override fun onCreate() {
         super.onCreate()
         repository = (application as CallBlockerApp).repository
@@ -111,59 +30,153 @@ class CallBlockerService : CallScreeningService() {
             return
         }
 
-        val simSlot = resolveSimSlot(details, number)
-        writeDiag("Resolved|number=$number|slot=$simSlot")
+        // ---- 全面诊断 ----
+        try {
+            val sb = StringBuilder()
+            sb.appendLine("=== CALL DETAILS DUMP ===")
+            sb.appendLine("number=$number")
 
+            val ah = details.accountHandle
+            sb.appendLine("accountHandle=$ah")
+            if (ah != null) {
+                sb.appendLine("ah.id=${ah.id}")
+                sb.appendLine("ah.component=${ah.componentName?.className}")
+                sb.appendLine("ah.package=${ah.componentName?.packageName}")
+            }
+            val props = details.callProperties
+            sb.appendLine("callProperties=$props")
+            sb.appendLine("callCapabilities=${details.callCapabilities}")
+            sb.appendLine("callDirection=${details.callDirection}")
+            sb.appendLine("state=${details.state}")
+            sb.appendLine("videoState=${details.videoState}")
+
+            try {
+                val extras = details.extras
+                if (extras != null && !extras.isEmpty) {
+                    sb.appendLine("extras bundle:")
+                    for (k in extras.keySet().sorted()) {
+                        val v = extras.get(k)
+                        sb.appendLine("  $k = $v")
+                    }
+                } else {
+                    sb.appendLine("extras=null or empty")
+                }
+            } catch (ex: Exception) {
+                sb.appendLine("extras read error: ${ex.message}")
+            }
+
+            try {
+                val subManager = getSystemService(SubscriptionManager::class.java)
+                val activeList = subManager?.activeSubscriptionInfoList
+                sb.appendLine("SubscriptionManager.activeList size=${activeList?.size ?: 0}")
+                activeList?.forEachIndexed { i, info ->
+                    sb.appendLine("  [$i] slot=${info.simSlotIndex} subId=${info.subscriptionId} carrier=${info.carrierName} number=${info.number}")
+                }
+
+                for (slotId in 0..3) {
+                    try {
+                        val info = subManager?.getActiveSubscriptionInfoForSimSlotIndex(slotId)
+                        if (info != null) {
+                            sb.appendLine("  getActiveSubInfoForSimSlot($slotId): subId=${info.subscriptionId} carrier=${info.carrierName} number=${info.number}")
+                        }
+                    } catch (_: Exception) {}
+                }
+
+                for (subId in 0..3) {
+                    try {
+                        val info = subManager?.getActiveSubscriptionInfo(subId)
+                        if (info != null && info.subscriptionId != 0) {
+                            sb.appendLine("  getActiveSubInfo(subId=$subId): slot=${info.simSlotIndex} carrier=${info.carrierName}")
+                        }
+                    } catch (_: Exception) {}
+                }
+            } catch (ex: Exception) {
+                sb.appendLine("SubscriptionManager error: ${ex.message}")
+            }
+
+            try {
+                val tm = getSystemService(TelephonyManager::class.java)
+                if (tm != null) {
+                    sb.appendLine("TelephonyManager:")
+                    sb.appendLine("  line1Number=${tm.line1Number}")
+                    sb.appendLine("  simOperator=${tm.simOperator}")
+                    sb.appendLine("  simSerialNumber=${tm.simSerialNumber}")
+                    sb.appendLine("  activeModemCount=${tm.activeModemCount}")
+                    sb.appendLine("  phoneCount=${tm.phoneCount}")
+
+                    for (slotId in 0..3) {
+                        try {
+                            val tm2 = tm.createForSubscriptionId(slotId)
+                            val ln = tm2.line1Number
+                            val op = tm2.simOperator
+                            if ((ln != null && ln.isNotEmpty()) || (op != null && op.isNotEmpty())) {
+                                sb.appendLine("  TM(subId=$slotId): line1=$ln operator=$op")
+                            }
+                        } catch (_: Exception) {}
+                    }
+                }
+            } catch (ex: Exception) {
+                sb.appendLine("TelephonyManager error: ${ex.message}")
+            }
+
+            writeDiag(sb.toString())
+        } catch (ex: Exception) {
+            writeDiag("ERROR during detailed dump: ${ex.message}")
+        }
+
+        // ---- 拦截逻辑 ----
+        val simSlot = 0 // 等诊断结果再决定
         scope.launch {
             try {
                 val config = repository.getSimConfig(simSlot)
                 if (!config.enabled) {
                     respondToCall(details, CallResponse.Builder().build())
+                    writeDiag("Slot $simSlot disabled, allow call")
                     return@launch
                 }
 
                 val normalized = CallBlockerRepository.normalizeNumber(number)
 
                 if (repository.isBlacklisted(normalized, simSlot)) {
-                    val blockResponse = CallResponse.Builder()
-                        .setDisallowCall(true)
-                        .setRejectCall(true)
-                        .setSilenceCall(true)
-                        .setSkipCallLog(false)
-                        .build()
-                    respondToCall(details, blockResponse)
-                    repository.recordCall(normalized, simSlot = simSlot)
-                    writeDiag("Action|number=$normalized|slot=$simSlot|action=BLOCK_LIST")
+                    doBlock(details, normalized, simSlot, "BLACKLIST")
                     return@launch
                 }
-
                 if (repository.isWhitelisted(normalized, simSlot)) {
-                    respondToCall(details, CallResponse.Builder().build())
-                    repository.recordCall(normalized, simSlot = simSlot)
-                    writeDiag("Action|number=$normalized|slot=$simSlot|action=ALLOW_LIST")
+                    doAllow(details, normalized, simSlot, "WHITELIST")
                     return@launch
                 }
-
                 if (repository.hasBeenCalledRecently(normalized, simSlot, config.intervalMinutes.toLong())) {
-                    respondToCall(details, CallResponse.Builder().build())
-                    repository.recordCall(normalized, simSlot = simSlot)
-                    writeDiag("Action|number=$normalized|slot=$simSlot|action=INTERVAL_OK(${config.intervalMinutes}m)")
+                    doAllow(details, normalized, simSlot, "INTERVAL_OK(${config.intervalMinutes}m)")
                     return@launch
                 }
-
-                val response = CallResponse.Builder()
-                    .setDisallowCall(true)
-                    .setRejectCall(true)
-                    .setSilenceCall(true)
-                    .setSkipCallLog(false)
-                    .build()
-                respondToCall(details, response)
-                repository.recordCall(normalized, simSlot = simSlot)
-                writeDiag("Action|number=$normalized|slot=$simSlot|action=BLOCK_DEFAULT")
-            } catch (_: Exception) {
+                doBlock(details, normalized, simSlot, "DEFAULT")
+            } catch (ex: Exception) {
                 respondToCall(details, CallResponse.Builder().build())
+                writeDiag("ERROR in screening: ${ex.message}")
             }
         }
+    }
+
+    private fun doAllow(details: Call.Details, number: String, simSlot: Int, reason: String) {
+        respondToCall(details, CallResponse.Builder().build())
+        scope.launch {
+            repository.recordCall(number, simSlot = simSlot)
+        }
+        writeDiag("ALLOW|number=$number|slot=$simSlot|reason=$reason")
+    }
+
+    private fun doBlock(details: Call.Details, number: String, simSlot: Int, reason: String) {
+        val response = CallResponse.Builder()
+            .setDisallowCall(true)
+            .setRejectCall(true)
+            .setSilenceCall(true)
+            .setSkipCallLog(false)
+            .build()
+        respondToCall(details, response)
+        scope.launch {
+            repository.recordCall(number, simSlot = simSlot)
+        }
+        writeDiag("BLOCK|number=$number|slot=$simSlot|reason=$reason")
     }
 
     private fun writeDiag(msg: String) {
