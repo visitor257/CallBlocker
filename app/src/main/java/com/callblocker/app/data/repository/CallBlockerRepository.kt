@@ -140,6 +140,8 @@ class CallBlockerRepository(
     // --- Per-SIM config ---
     val allSimConfigs: Flow<List<SimConfig>> = simConfigDao.getAll()
 
+    suspend fun getEnabledSimConfigs(): List<SimConfig> = simConfigDao.getAllList().filter { it.enabled }
+
     suspend fun getSimConfig(simSlot: Int): SimConfig {
         return simConfigDao.get(simSlot) ?: SimConfig(simSlot)
     }
