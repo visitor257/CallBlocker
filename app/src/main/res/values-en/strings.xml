@@ -7,47 +7,34 @@
     <string name="tab_blacklist">Blacklist</string>
     <string name="tab_settings">Settings</string>
 
-    <string name="sim_selector_title">Select SIM Card</string>
-    <string name="sim_selector_label">Current SIM Card</string>
-    <string name="sim_selector_switch">Switch</string>
-    <string name="sim_selector_selected">Current</string>
-    <string name="sim_card_format">SIM %d</string>
-    <string name="sim_card_default_1">SIM 1</string>
-    <string name="sim_card_default_2">SIM 2</string>
-
-    <string name="home_service_running">%1$s — Blocking Active</string>
-    <string name="home_service_paused">%1$s — Blocking Paused</string>
-    <string name="home_blocked_summary">%1$d blocked · %2$d whitelisted</string>
+    <string name="home_service_running_global">Blocking Active</string>
+    <string name="home_service_paused_global">Blocking Paused</string>
+    <string name="home_blocked_summary_global">%1$d blocked · %2$d whitelisted · %3$d blacklisted</string>
     <string name="home_tap_pause">Tap to pause</string>
     <string name="home_tap_enable">Tap to enable</string>
     <string name="home_guide_title">Quick Guide</string>
     <string name="home_guide_text">1. Add numbers to the whitelist\n2. Go to System Settings → Apps → Default Apps → Call Screening\n3. Set "CallBlocker" as the default call screening app\n4. First-time calls from unknown numbers will be automatically blocked</string>
-    <string name="home_blocked_records">%1$s — Blocked Calls</string>
-    <string name="home_view_records">View Log (%d)</string>
+    <string name="home_blocked_records_global">Blocked Calls</string>
+    <string name="home_view_records_global">View Log (%d)</string>
     <string name="home_no_records">No blocked calls yet</string>
 
-    <string name="whitelist_title">%1$s — Whitelist (%2$d)</string>
-    <string name="whitelist_empty">%1$s whitelist is empty\nTap + at the bottom to add numbers</string>
+    <string name="whitelist_title_global">Whitelist (%d)</string>
+    <string name="whitelist_empty_global">Whitelist is empty\nTap + at the bottom to add numbers</string>
     <string name="whitelist_import_contacts">Import Contacts</string>
-    <string name="whitelist_import_success">Imported %1$d contacts to %2$s</string>
-    <string name="whitelist_import_none">No new contacts to import</string>
+    <string name="whitelist_import_success_global">Imported %1$d contacts</string>
+    <string name="whitelist_import_none_global">No new contacts to import</string>
     <string name="whitelist_source_contact">From contacts</string>
     <string name="whitelist_source_manual">Manually added</string>
 
-    <string name="blacklist_title">%1$s — Blacklist (%2$d)</string>
-    <string name="blacklist_empty">%1$s blacklist is empty\nBlacklisted numbers will always be blocked\nTap + at the bottom to add numbers</string>
+    <string name="blacklist_title_global">Blacklist (%d)</string>
+    <string name="blacklist_empty_global">Blacklist is empty\nBlacklisted numbers will always be blocked\nTap + at the bottom to add numbers</string>
     <string name="blacklist_source_contact">From contacts</string>
     <string name="blacklist_source_manual">Manually added</string>
     <string name="blacklist_also_in_whitelist">⚠ Also in whitelist</string>
 
-    <string name="settings_title">%1$s — Settings</string>
-    <string name="settings_copy_title">Copy Configuration</string>
-    <string name="settings_copy_desc">Copy interval and whitelist from another SIM to %1$s</string>
-    <string name="settings_copy_placeholder">Select source</string>
-    <string name="settings_copy_source_label">Select source SIM card</string>
-    <string name="settings_copy_button">Copy from %1$s</string>
+    <string name="settings_title_global">Settings</string>
     <string name="settings_interval_title">Blocking Interval</string>
-    <string name="settings_interval_desc">Same unknown number will only be blocked once within %1$d minutes. Callback from the number will be allowed.</string>
+    <string name="settings_interval_desc_global">Same unknown number will only be blocked once within %1$d minutes.</string>
     <string name="settings_interval_min">1 min</string>
     <string name="settings_interval_value">%1$d min</string>
     <string name="settings_interval_max">120 min</string>
@@ -57,9 +44,9 @@
     <string name="settings_permissions_title">Permissions</string>
     <string name="settings_open_permissions">Open app permissions</string>
     <string name="settings_data_title">Data Management</string>
-    <string name="settings_clear_records">Clear %1$s blocked records</string>
+    <string name="settings_clear_records_global">Clear blocked records</string>
     <string name="settings_app_version">CallBlocker %1$s</string>
-    <string name="settings_app_subtitle">Powered by Android CallScreeningService | Whitelist/Blacklist | Multi-SIM</string>
+    <string name="settings_app_subtitle">Powered by Android CallScreeningService | Whitelist/Blacklist | Global Blocking</string>
 
     <string name="dialog_add_whitelist">Add to Whitelist</string>
     <string name="dialog_add_blacklist">Add to Blacklist</string>
@@ -67,16 +54,13 @@
     <string name="dialog_move_blacklist">Move to Blacklist</string>
     <string name="dialog_remove_blacklist">Remove from Blacklist</string>
     <string name="dialog_move_whitelist_from_blacklist">Move to Whitelist</string>
-    <string name="dialog_copy_config">Copy Configuration</string>
     <string name="dialog_clear_records">Clear Records</string>
 
-    <string name="confirm_remove_whitelist">Remove %1$s from the whitelist?\nThe number will be subject to normal blocking rules again.</string>
-    <string name="confirm_move_to_blacklist">Move %1$s from whitelist to blacklist?\nThe number will always be blocked, regardless of interval rules.</string>
-    <string name="confirm_remove_blacklist">Remove %1$s from the blacklist?</string>
-    <string name="confirm_move_to_whitelist">Move %1$s from blacklist to whitelist?\nThe number will no longer be blocked.</string>
-    <string name="confirm_clear_records">Clear all blocked call records for %1$s? This action cannot be undone.</string>
-    <string name="confirm_copy_config_text">The following will be copied from %1$s to %2$s:\n\n• Blocking interval\n• Whitelist numbers\n• Blacklist numbers\n\nExisting configuration on %2$s will be overwritten. Continue?</string>
-    <string name="confirm_copy_success">Copied interval setting, %1$d whitelist and %2$d blacklist numbers</string>
+    <string name="confirm_remove_whitelist_global">Remove %1$s from the whitelist?\nThe number will be subject to normal blocking rules again.</string>
+    <string name="confirm_move_to_blacklist_global">Move %1$s from whitelist to blacklist?\nThe number will always be blocked, regardless of interval rules.</string>
+    <string name="confirm_remove_blacklist_global">Remove %1$s from the blacklist?</string>
+    <string name="confirm_move_to_whitelist_global">Move %1$s from blacklist to whitelist?\nThe number will no longer be blocked.</string>
+    <string name="confirm_clear_records_global">Clear all blocked call records? This action cannot be undone.</string>
 
     <string name="label_phone_number">Phone number</string>
     <string name="label_nickname_optional">Label (optional)</string>
@@ -87,12 +71,9 @@
     <string name="action_clear">Clear</string>
     <string name="action_move_blacklist">Move to Blacklist</string>
     <string name="action_move_whitelist_from_blacklist">Move to Whitelist</string>
-    <string name="action_confirm_copy">Copy</string>
 
     <string name="cd_add">Add</string>
     <string name="cd_delete">Delete</string>
-    <string name="cd_expand">Expand</string>
-    <string name="cd_selected">Selected</string>
     <string name="cd_in_whitelist">In whitelist</string>
     <string name="cd_add_blacklist">Add to blacklist</string>
     <string name="cd_add_whitelist">Add to whitelist</string>

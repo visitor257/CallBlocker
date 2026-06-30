@@ -1,4 +1,4 @@
-﻿package com.callblocker.app.data.repository
+package com.callblocker.app.data.repository
 
 import android.content.Context
 import android.provider.ContactsContract
@@ -18,31 +18,27 @@ class CallBlockerRepository(
     private val callRecordDao: CallRecordDao,
     private val simConfigDao: SimConfigDao
 ) {
-    // --- Per-SIM whitelist ---
-    fun getWhitelistBySim(simSlot: Int): Flow<List<WhitelistEntry>> = whitelistDao.getBySim(simSlot)
+    // === Whitelist (global, always simSlot=0) ===
 
-    suspend fun isWhitelisted(number: String, simSlot: Int = 0): Boolean {
-        return whitelistDao.countByNumber(normalizeNumber(number), simSlot) > 0
+    val allWhitelist: Flow<List<WhitelistEntry>> = whitelistDao.getAll()
+
+    suspend fun isWhitelisted(number: String): Boolean {
+        return whitelistDao.countByNumber(normalizeNumber(number), 0) > 0
     }
 
-    suspend fun addToWhitelist(number: String, name: String? = null, source: String = "MANUAL", simSlot: Int = 0) {
+    suspend fun addToWhitelist(number: String, name: String? = null, source: String = "MANUAL") {
         val normalized = normalizeNumber(number)
         // Conflict prevention: remove from blacklist first
-        blacklistDao.deleteByNumber(normalized, simSlot)
+        blacklistDao.deleteByNumber(normalized, 0)
         whitelistDao.insert(WhitelistEntry(
-            phoneNumber = normalized,
-            displayName = name,
-            source = source,
-            simSlot = simSlot
+            phoneNumber = normalized, displayName = name, source = source, simSlot = 0
         ))
     }
 
-    suspend fun removeFromWhitelist(id: Long) {
-        whitelistDao.deleteById(id)
-    }
+    suspend fun removeFromWhitelist(id: Long) = whitelistDao.deleteById(id)
 
-    suspend fun importFromContacts(context: Context, simSlot: Int = 0): Int {
-        val existing = whitelistDao.getBySimList(simSlot)
+    suspend fun importFromContacts(context: Context): Int {
+        val existing = whitelistDao.getAllList()
         val existingNumbers = existing.map { normalizeNumber(it.phoneNumber) }.toSet()
         val cursor = context.contentResolver.query(
             ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
@@ -60,10 +56,7 @@ class CallBlockerRepository(
             val normalized = normalizeNumber(number)
             if (normalized.isNotBlank() && normalized !in existingNumbers) {
                 toInsert.add(WhitelistEntry(
-                    phoneNumber = normalized,
-                    displayName = name,
-                    source = "CONTACT",
-                    simSlot = simSlot
+                    phoneNumber = normalized, displayName = name, source = "CONTACT", simSlot = 0
                 ))
             }
         }
@@ -72,92 +65,53 @@ class CallBlockerRepository(
         return toInsert.size
     }
 
-    suspend fun copyWhitelist(fromSim: Int, toSim: Int): Int {
-        val entries = whitelistDao.getBySimList(fromSim)
-        val target = whitelistDao.getBySimList(toSim)
-        val targetNumbers = target.map { normalizeNumber(it.phoneNumber) }.toSet()
-        val toCopy = entries.filter { normalizeNumber(it.phoneNumber) !in targetNumbers }.map {
-            it.copy(id = 0, simSlot = toSim)
-        }
-        if (toCopy.isNotEmpty()) whitelistDao.insertAll(toCopy)
-        return toCopy.size
+    // === Blacklist (global, always simSlot=0) ===
+
+    val allBlacklist: Flow<List<BlockedNumber>> = blacklistDao.getAll()
+
+    suspend fun isBlacklisted(number: String): Boolean {
+        return blacklistDao.countByNumber(normalizeNumber(number), 0) > 0
     }
 
-    // --- Per-SIM blacklist ---
-    fun getBlacklistBySim(simSlot: Int): Flow<List<BlockedNumber>> = blacklistDao.getBySim(simSlot)
-
-    suspend fun isBlacklisted(number: String, simSlot: Int = 0): Boolean {
-        return blacklistDao.countByNumber(normalizeNumber(number), simSlot) > 0
-    }
-
-    suspend fun addToBlacklist(number: String, name: String? = null, source: String = "MANUAL", simSlot: Int = 0) {
+    suspend fun addToBlacklist(number: String, name: String? = null, source: String = "MANUAL") {
         val normalized = normalizeNumber(number)
         // Conflict prevention: remove from whitelist first
-        whitelistDao.deleteByNumber(normalized, simSlot)
+        whitelistDao.deleteByNumber(normalized, 0)
         blacklistDao.insert(BlockedNumber(
-            phoneNumber = normalized,
-            displayName = name,
-            source = source,
-            simSlot = simSlot
+            phoneNumber = normalized, displayName = name, source = source, simSlot = 0
         ))
     }
 
-    suspend fun removeFromBlacklist(id: Long) {
-        blacklistDao.deleteById(id)
-    }
+    suspend fun removeFromBlacklist(id: Long) = blacklistDao.deleteById(id)
 
-    suspend fun copyBlacklist(fromSim: Int, toSim: Int): Int {
-        val entries = blacklistDao.getBySimList(fromSim)
-        val target = blacklistDao.getBySimList(toSim)
-        val targetNumbers = target.map { normalizeNumber(it.phoneNumber) }.toSet()
-        val toCopy = entries.filter { normalizeNumber(it.phoneNumber) !in targetNumbers }.map {
-            it.copy(id = 0, simSlot = toSim)
-        }
-        if (toCopy.isNotEmpty()) blacklistDao.insertAll(toCopy)
-        return toCopy.size
-    }
+    // === Call records (global, always simSlot=0) ===
 
-    // --- Per-SIM blocked calls ---
-    fun getBlockedCallsBySim(simSlot: Int): Flow<List<BlockedCallRecord>> = callRecordDao.getBySim(simSlot)
+    val allBlockedCalls: Flow<List<BlockedCallRecord>> = callRecordDao.getAll()
 
-    suspend fun hasBeenCalledRecently(number: String, simSlot: Int, intervalMinutes: Long): Boolean {
+    suspend fun hasBeenCalledRecently(number: String, intervalMinutes: Long): Boolean {
         val since = System.currentTimeMillis() - (intervalMinutes * 60 * 1000)
-        return callRecordDao.countByNumberSince(normalizeNumber(number), simSlot, since) > 0
+        return callRecordDao.countByNumberSinceAnySlot(normalizeNumber(number), since) > 0
     }
 
-    suspend fun recordCall(number: String, name: String? = null, simSlot: Int = 0) {
+    suspend fun recordCall(number: String, name: String? = null) {
         callRecordDao.insert(BlockedCallRecord(
-            phoneNumber = normalizeNumber(number),
-            displayName = name,
-            simSlot = simSlot
+            phoneNumber = normalizeNumber(number), displayName = name, simSlot = 0
         ))
     }
 
     suspend fun clearBlockedLogs() = callRecordDao.clearAll()
-    suspend fun clearBlockedLogsBySim(simSlot: Int) = callRecordDao.clearBySim(simSlot)
 
-    // --- Per-SIM config ---
-    val allSimConfigs: Flow<List<SimConfig>> = simConfigDao.getAll()
+    // === Config (single global config, simSlot=0) ===
 
-    suspend fun getEnabledSimConfigs(): List<SimConfig> = simConfigDao.getAllList().filter { it.enabled }
+    val globalConfig: Flow<List<SimConfig>> = simConfigDao.getAll()
 
-    suspend fun getSimConfig(simSlot: Int): SimConfig {
-        return simConfigDao.get(simSlot) ?: SimConfig(simSlot)
+    suspend fun getConfig(): SimConfig {
+        return simConfigDao.get(0) ?: SimConfig(0)
     }
 
-    suspend fun saveSimConfig(config: SimConfig) {
+    suspend fun saveConfig(config: SimConfig) {
         simConfigDao.insert(config)
     }
-
-    suspend fun copySimConfig(fromSim: Int, toSim: Int) {
-        val from = getSimConfig(fromSim)
-        simConfigDao.insert(from.copy(simSlot = toSim))
-    }
-
-    // --- Legacy full lists (for backward compat) ---
-    val allWhitelist: Flow<List<WhitelistEntry>> = whitelistDao.getAll()
-    val allBlockedCalls: Flow<List<BlockedCallRecord>> = callRecordDao.getAll()
-    val allSimConfigsList: Flow<List<SimConfig>> = simConfigDao.getAll()
 
     companion object {
         fun normalizeNumber(number: String): String {
@@ -165,10 +119,10 @@ class CallBlockerRepository(
                 .replace("(", "").replace(")", "")
                 .replace(Regex("[^\\d+]+"), "")
             return when {
-                cleaned.startsWith("+86") -> cleaned.substring(3)  // +8613800138000 → 13800138000
-                cleaned.startsWith("0086") -> cleaned.substring(4) // 008613800138000 → 13800138000
-                cleaned.startsWith("00") -> "+" + cleaned.substring(2) // 00852... → +852...
-                else -> cleaned // 13800138000 or +85212345678 — keep as is
+                cleaned.startsWith("+86") -> cleaned.substring(3)
+                cleaned.startsWith("0086") -> cleaned.substring(4)
+                cleaned.startsWith("00") -> "+" + cleaned.substring(2)
+                else -> cleaned
             }
         }
     }
