@@ -36,10 +36,10 @@ fun BlockedNumbersScreen(modifier: Modifier = Modifier) {
     val sims = remember(simConfigs) {
         val detected = SimUtils.getActiveSims(context)
         val configMap = simConfigs.associateBy { it.simSlot }
-        val defaultLabel = { slot: Int -> context.getString(com.callblocker.app.R.string.sim_card_format, slot + 1) }
+        // System carrier name takes priority; config name only used when system returns nothing
         detected.map { info ->
             val cfg = configMap[info.simSlot]
-            if (cfg != null && cfg.displayName != defaultLabel(info.simSlot)) {
+            if (cfg != null && info.displayName.isEmpty()) {
                 info.copy(displayName = cfg.displayName)
             } else info
         }.ifEmpty { SimUtils.getDefaultSims(context) }
