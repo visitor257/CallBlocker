@@ -115,7 +115,7 @@ class CallBlockerService : CallScreeningService() {
 
                 val normalized = CallBlockerRepository.normalizeNumber(number)
 
-                // Blacklist check (per-SIM)
+                // 1. Blacklist check (per-SIM) → block + record
                 if (repository.isBlacklisted(normalized, simSlot)) {
                     val blockResponse = CallResponse.Builder()
                         .setDisallowCall(true)
@@ -124,23 +124,26 @@ class CallBlockerService : CallScreeningService() {
                         .setSkipCallLog(false)
                         .build()
                     respondToCall(details, blockResponse)
-                    repository.recordBlockedCall(normalized, simSlot = simSlot)
+                    repository.recordCall(normalized, simSlot = simSlot)
                     return@launch
                 }
 
-                // Whitelist check (per-SIM)
+                // 2. Whitelist check (per-SIM) → allow + record (for interval tracking later)
                 if (repository.isWhitelisted(normalized, simSlot)) {
                     respondToCall(details, CallResponse.Builder().build())
+                    repository.recordCall(normalized, simSlot = simSlot)
                     return@launch
                 }
 
-                // Interval check (across all SIMs — simSlot detection is heuristic)
-                if (repository.hasBeenCalledRecently(normalized, config.intervalMinutes.toLong())) {
+                // 3. Interval check (per-SIM) → record + allow
+                // "距离上次来电时间" — every call resets the timer
+                if (repository.hasBeenCalledRecently(normalized, simSlot, config.intervalMinutes.toLong())) {
                     respondToCall(details, CallResponse.Builder().build())
+                    repository.recordCall(normalized, simSlot = simSlot)
                     return@launch
                 }
 
-                // Default: block
+                // 4. Default: block + record
                 val response = CallResponse.Builder()
                     .setDisallowCall(true)
                     .setRejectCall(true)
@@ -148,7 +151,7 @@ class CallBlockerService : CallScreeningService() {
                     .setSkipCallLog(false)
                     .build()
                 respondToCall(details, response)
-                repository.recordBlockedCall(normalized, simSlot = simSlot)
+                repository.recordCall(normalized, simSlot = simSlot)
             } catch (_: Exception) {
                 respondToCall(details, CallResponse.Builder().build())
             }
